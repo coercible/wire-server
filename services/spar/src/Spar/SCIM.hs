@@ -86,11 +86,14 @@ configuration = SCIM.Meta.empty
 
 type APIScim
      = OmitDocs :> "v2" :> SCIM.SiteAPI ScimToken
+  :<|> "auth-token" :> APIScimToken
 
 apiScim :: ServerT APIScim Spar
 apiScim = hoistSCIM (toServant (SCIM.siteServer configuration))
+     :<|> apiScimToken
   where
-    hoistSCIM = hoistServer (Proxy @APIScim) (SCIM.fromSCIMHandler fromError)
+    hoistSCIM = hoistServer (Proxy @(SCIM.SiteAPI ScimToken))
+                            (SCIM.fromSCIMHandler fromError)
     fromError = throwError . SAML.CustomServant . SCIM.scimToServantErr
 
 ----------------------------------------------------------------------------
@@ -316,3 +319,23 @@ instance SCIM.AuthDB Spar where
       lift (wrapMonadClient (Data.lookupScimToken token))
 
 -- TODO: don't forget to delete the tokens when the team is deleted
+
+----------------------------------------------------------------------------
+-- API for manipulating authentication tokens
+
+type APIScimToken
+     = Post '[JSON] ScimToken
+  :<|> Capture "token" ScimToken :> DeleteNoContent '[JSON] NoContent
+
+apiScimToken :: ServerT APIScimToken Spar
+apiScimToken
+     = createScimToken
+  :<|> deleteScimToken
+
+createScimToken :: Spar ScimToken
+createScimToken =
+    -- Don't enable this endpoint until SCIM is ready.
+    error "Creating SCIM tokens is not supported yet."
+
+deleteScimToken :: ScimToken -> Spar NoContent
+deleteScimToken = undefined

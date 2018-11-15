@@ -4,6 +4,8 @@
 {-# LANGUAGE RecordWildCards      #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE TypeApplications     #-}
+{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -24,6 +26,8 @@ instance Arbitrary IdPList where
   arbitrary = do
     _idplProviders <- arbitrary
     pure $ IdPList {..}
+
+deriving instance Arbitrary ScimToken
 
 instance Arbitrary NoContent where
   arbitrary = pure NoContent
