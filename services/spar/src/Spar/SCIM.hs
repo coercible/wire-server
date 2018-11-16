@@ -50,11 +50,14 @@ import Data.Text.Encoding
 import Data.Aeson as Aeson
 import Text.Email.Validate
 import Servant.Generic
+import OpenSSL.Random (randBytes)
+import Data.String.Conversions
 
 import qualified Data.Text    as Text
 import qualified Data.UUID.V4 as UUID
 import qualified SAML2.WebSSO as SAML
 import qualified Spar.Data    as Data
+import qualified Data.ByteString.Base64 as ES
 
 import qualified Web.SCIM.Class.User              as SCIM
 import qualified Web.SCIM.Class.Group             as SCIM
@@ -324,18 +327,44 @@ instance SCIM.AuthDB Spar where
 -- API for manipulating authentication tokens
 
 type APIScimToken
+     = Header "Z-User" UserId :> APIScimTokenCreate
+  :<|> Header "Z-User" UserId :> APIScimTokenDelete
+
+type APIScimTokenCreate
      = Post '[JSON] ScimToken
-  :<|> Capture "token" ScimToken :> DeleteNoContent '[JSON] NoContent
+
+type APIScimTokenDelete
+     = Capture "token" ScimToken
+    :> DeleteNoContent '[JSON] NoContent
 
 apiScimToken :: ServerT APIScimToken Spar
 apiScimToken
      = createScimToken
   :<|> deleteScimToken
 
-createScimToken :: Spar ScimToken
-createScimToken =
+createScimToken :: Maybe UserId -> Spar ScimToken
+createScimToken zusr = do
     -- Don't enable this endpoint until SCIM is ready.
-    error "Creating SCIM tokens is not supported yet."
+    _ <- error "Creating SCIM tokens is not supported yet."
+    teamid <- getZUsrOwnedTeam zusr
+    idps <- wrapMonadClient $ Data.getIdPConfigsByTeam teamid
+    case idps of
+        [idp] -> do
+            -- TODO: sign tokens. Also, we might want to use zauth, if we can / if
+            -- it makes sense semantically
+            token <- ScimToken . cs . ES.encode <$> liftIO (randBytes 32)
+            let idpid = idp ^. SAML.idpId
+            wrapMonadClient $ Data.insertScimToken teamid token (Just idpid)
+            pure token
+            -- TODO let's also have unique description?
+        -- TODO throw proper Spar errors
+        [] -> error "SCIM tokens can only be created for a team \
+                    \that has an IdP configured"
+        _  -> error "SCIM tokens can only be created for a team \
+                    \that has exactly one IdP configured"
 
-deleteScimToken :: ScimToken -> Spar NoContent
-deleteScimToken = undefined
+deleteScimToken :: Maybe UserId -> ScimToken -> Spar NoContent
+deleteScimToken zusr token = do
+    teamid <- getZUsrOwnedTeam zusr
+    wrapMonadClient $ Data.deleteScimToken teamid token
+    pure NoContent
