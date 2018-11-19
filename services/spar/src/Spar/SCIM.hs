@@ -375,11 +375,12 @@ createScimToken zusr = do
             wrapMonadClient $ Data.insertScimToken teamid token (Just idpid)
             pure token
             -- TODO let's also have unique description?
-        -- TODO throw proper Spar errors
-        [] -> error "SCIM tokens can only be created for a team \
-                    \that has an IdP configured"
-        _  -> error "SCIM tokens can only be created for a team \
-                    \that has exactly one IdP configured"
+        [] -> throwSpar $ SparProvisioningNoSingleIdP
+                "SCIM tokens can only be created for a team with an IdP, \
+                \but none are found"
+        _  -> throwSpar $ SparProvisioningNoSingleIdP
+                "SCIM tokens can only be created for a team with exactly one IdP, \
+                \but more are found"
 
 deleteScimToken :: Maybe UserId -> ScimToken -> Spar NoContent
 deleteScimToken zusr token = do
