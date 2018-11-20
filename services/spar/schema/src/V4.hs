@@ -30,6 +30,7 @@ migration = Migration 4 "Store SCIM authentication tokens" $ do
             ( team          uuid
             , token         text
             , idp           uuid         -- optional
+            , descr         text
             , PRIMARY KEY (team, token)
             );
 
@@ -37,6 +38,7 @@ migration = Migration 4 "Store SCIM authentication tokens" $ do
             ( team          uuid
             , token         text
             , idp           uuid         -- optional
+            , descr         text
             , PRIMARY KEY (token, team)
             );
    |]

@@ -7,6 +7,9 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE InstanceSigs #-}
 
 -- TODO remove
@@ -21,8 +24,12 @@
 --
 -- See <https://en.wikipedia.org/wiki/System_for_Cross-domain_Identity_Management>
 module Spar.SCIM
-  ( APIScim
+  (
+  -- * The API
+    APIScim
   , apiScim
+  -- ** Request types
+  , CreateScimToken(..)
 
   -- * The mapping between Wire and SCIM users
   -- $mapping
@@ -34,7 +41,7 @@ import Galley.Types.Teams    as Galley
 import Control.Monad.Except
 import Control.Monad.Catch
 import Control.Exception
-import Control.Lens
+import Control.Lens hiding ((.=))
 import Data.Id
 import Data.Range
 import Servant
@@ -60,6 +67,7 @@ import qualified Data.UUID.V4 as UUID
 import qualified SAML2.WebSSO as SAML
 import qualified Spar.Data    as Data
 import qualified Data.ByteString.Base64 as ES
+import qualified "swagger2" Data.Swagger as Swagger
 
 import qualified Web.SCIM.Class.User              as SCIM
 import qualified Web.SCIM.Class.Group             as SCIM
@@ -349,7 +357,8 @@ type APIScimToken
   :<|> Header "Z-User" UserId :> APIScimTokenDelete
 
 type APIScimTokenCreate
-     = Post '[JSON] ScimToken
+     = ReqBody '[JSON] CreateScimToken
+    :> Post '[JSON] ScimToken
 
 type APIScimTokenDelete
      = Capture "token" ScimToken
@@ -360,8 +369,33 @@ apiScimToken
      = createScimToken
   :<|> deleteScimToken
 
-createScimToken :: Maybe UserId -> Spar ScimToken
-createScimToken zusr = do
+data CreateScimToken = CreateScimToken
+  { createScimTokenDescription :: Text
+  } deriving (Eq, Show)
+
+instance FromJSON CreateScimToken where
+  parseJSON = withObject "CreateScimToken" $ \o -> do
+    createScimTokenDescription <- o .: "description"
+    pure CreateScimToken{..}
+
+instance ToJSON CreateScimToken where
+  toJSON CreateScimToken{..} = object
+    [ "description" .= createScimTokenDescription
+    ]
+
+instance Swagger.ToSchema CreateScimToken where
+  declareNamedSchema _ = do
+    textSchema <- Swagger.declareSchemaRef (Proxy @Text)
+    return $ Swagger.NamedSchema (Just "CreateScimToken") $ mempty
+      & Swagger.type_ .~ Swagger.SwaggerObject
+      & Swagger.properties .~
+          [ ("description", textSchema)
+          ]
+      & Swagger.required .~ [ "description" ]
+
+createScimToken :: Maybe UserId -> CreateScimToken -> Spar ScimToken
+createScimToken zusr CreateScimToken{..} = do
+    let descr = createScimTokenDescription
     -- Don't enable this endpoint until SCIM is ready.
     _ <- error "Creating SCIM tokens is not supported yet."
     teamid <- getZUsrOwnedTeam zusr
@@ -372,9 +406,8 @@ createScimToken zusr = do
             -- it makes sense semantically
             token <- ScimToken . cs . ES.encode <$> liftIO (randBytes 32)
             let idpid = idp ^. SAML.idpId
-            wrapMonadClient $ Data.insertScimToken teamid token (Just idpid)
+            wrapMonadClient $ Data.insertScimToken teamid token (Just idpid) descr
             pure token
-            -- TODO let's also have unique description?
         [] -> throwSpar $ SparProvisioningNoSingleIdP
                 "SCIM tokens can only be created for a team with an IdP, \
                 \but none are found"

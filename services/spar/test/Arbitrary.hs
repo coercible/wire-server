@@ -19,6 +19,7 @@ import Data.Id ()
 import SAML2.WebSSO.Test.Arbitrary ()
 import Servant.API.ContentTypes
 import Spar.Types
+import Spar.SCIM
 import Test.QuickCheck
 
 
@@ -32,6 +33,8 @@ deriving instance Arbitrary ScimToken
 instance Arbitrary NoContent where
   arbitrary = pure NoContent
 
+instance Arbitrary CreateScimToken where
+  arbitrary = CreateScimToken <$> arbitrary
 
 -- This is not required by the servant-server instances, but the swagger
 -- tests want it. See https://github.com/haskell-servant/servant-swagger/issues/58
