@@ -45,7 +45,7 @@ import Control.Lens hiding ((.=))
 import Data.Id
 import Data.Range
 import Servant
-import Spar.App (Spar, wrapMonadClient)
+import Spar.App (Spar, wrapMonadClient, sparCtxOpts)
 import Spar.API.Util
 import Spar.Error
 import Spar.Types
@@ -399,6 +399,10 @@ createScimToken zusr CreateScimToken{..} = do
     -- Don't enable this endpoint until SCIM is ready.
     _ <- error "Creating SCIM tokens is not supported yet."
     teamid <- getZUsrOwnedTeam zusr
+    tokenNumber <- fmap length $ wrapMonadClient $ Data.getScimTokens teamid
+    maxTokens <- asks (maxScimTokens . sparCtxOpts)
+    unless (tokenNumber < maxTokens) $
+        throwSpar SparProvisioningTokenLimitReached
     idps <- wrapMonadClient $ Data.getIdPConfigsByTeam teamid
     case idps of
         [idp] -> do
