@@ -37,6 +37,7 @@ module Spar.Data
   , lookupScimToken
   , getScimTokens
   , deleteScimToken
+  , deleteTeamScimTokens
   ) where
 
 import Imports
@@ -399,6 +400,27 @@ deleteScimToken team token = retry x5 $ batch $ do
   where
     del :: PrepQuery W (TeamId, ScimToken) ()
     del = "DELETE FROM team_provisioning WHERE team = ? AND token = ?"
+
+    delRev :: PrepQuery W (TeamId, ScimToken) ()
+    delRev = "DELETE FROM team_provisioning_rev WHERE team = ? AND token = ?"
+
+-- | Delete all tokens belonging to a team.
+deleteTeamScimTokens
+  :: (HasCallStack, MonadClient m)
+  => TeamId -> m ()
+deleteTeamScimTokens team = do
+  tokens <- retry x5 $ query sel $ params Quorum (Identity team)
+  retry x5 $ batch $ do
+    setType BatchLogged
+    setConsistency Quorum
+    addPrepQuery delAll (Identity team)
+    for_ tokens $ \(Identity token) -> addPrepQuery delRev (team, token)
+  where
+    sel :: PrepQuery R (Identity TeamId) (Identity ScimToken)
+    sel = "SELECT token FROM team_provisioning WHERE team = ?"
+
+    delAll :: PrepQuery W (Identity TeamId) ()
+    delAll = "DELETE FROM team_provisioning WHERE team = ?"
 
     delRev :: PrepQuery W (TeamId, ScimToken) ()
     delRev = "DELETE FROM team_provisioning_rev WHERE team = ? AND token = ?"
