@@ -1,14 +1,6 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-function shutdown() {
-    # thanks: https://coderwall.com/p/q-ovnw/killing-all-child-processes-in-a-shell-script
-    PGID=$(ps -o pgid= $$ | grep -o [0-9]*)
-    setsid kill -- -$PGID
-    exit 0
-}
-trap "shutdown" SIGINT SIGTERM
-
 USAGE="$0 <test-executable> [args...]"
 EXE=${1:?$USAGE}
 TOP_LEVEL="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
@@ -39,7 +31,20 @@ function kill_gracefully() {
     kill "$(list_descendants $PARENT_PID)" &> /dev/null
 }
 
-trap "kill_gracefully; kill_all" INT TERM ERR
+function shutdown() {
+    code="$1"
+    echo -e "\nshutting down...\n"
+    kill_gracefully
+    sleep 1
+    kill_all
+    wait
+    exit "$code"
+}
+trap "shutdown  1" SIGHUP
+trap "shutdown  2" SIGINT
+trap "shutdown 15" SIGTERM
+trap "shutdown  0" EXIT
+trap "shutdown  1" ERR
 
 function check_prerequisites() {
     if ! ( nc -z 127.0.0.1 9042 \
