@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+function shutdown() {
+    # thanks: https://coderwall.com/p/q-ovnw/killing-all-child-processes-in-a-shell-script
+    PGID=$(ps -o pgid= $$ | grep -o [0-9]*)
+    setsid kill -- -$PGID
+    exit 0
+}
+trap "shutdown" SIGINT SIGTERM
+
 USAGE="$0 <test-executable> [args...]"
 EXE=${1:?$USAGE}
 TOP_LEVEL="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
